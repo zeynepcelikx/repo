@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "883878657226",
+    "project_id": "indirkazan-d1c8c",
+    "storage_bucket": "indirkazan-d1c8c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:883878657226:android:c058535cf9d4527284c833",
+        "android_client_info": {
+          "package_name": "com.example.indirkazan"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA9sFyIXSHf6lEW5XmlKDlMbmabLB6rpm0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
