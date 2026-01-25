@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'customer_home.dart';
 import 'my_orders_screen.dart';
+import 'customer_map_screen.dart'; // <-- Harita ekranı importu
 import '../common/notifications_screen.dart';
 import '../common/profile_screen.dart';
 
@@ -22,12 +23,13 @@ class _CustomerMainLayoutState extends State<CustomerMainLayout> {
   @override
   void initState() {
     super.initState();
-    // Sayfaların sırası: Keşfet -> Siparişler -> Bildirimler -> Profil
+    // Sayfaların sırası: Keşfet -> Harita -> Siparişler -> Bildirimler -> Profil
     _pages = [
-      const CustomerHomeScreen(),
-      const MyOrdersScreen(),
-      const NotificationsScreen(),
-      const ProfileScreen(),
+      const CustomerHomeScreen(),    // 0
+      const CustomerMapScreen(),     // 1 (YENİDEN EKLENDİ 🗺️)
+      const MyOrdersScreen(),        // 2
+      const NotificationsScreen(),   // 3
+      const ProfileScreen(),         // 4
     ];
   }
 
@@ -49,7 +51,7 @@ class _CustomerMainLayoutState extends State<CustomerMainLayout> {
         onTap: _onItemTapped,
         selectedItemColor: Colors.green, // Aktif ikon rengi
         unselectedItemColor: Colors.grey, // Pasif ikon rengi
-        type: BottomNavigationBarType.fixed, // 4 ikon olduğu için sabit tip
+        type: BottomNavigationBarType.fixed, // 5 ikon olduğu için sabit tip şart
         items: [
           // 1. KEŞFET
           const BottomNavigationBarItem(
@@ -57,13 +59,19 @@ class _CustomerMainLayoutState extends State<CustomerMainLayout> {
             label: 'Keşfet',
           ),
 
-          // 2. SİPARİŞLER
+          // 2. HARİTA (GERİ GELDİ) 🗺️
+          const BottomNavigationBarItem(
+            icon: Icon(Icons.map_outlined),
+            label: 'Harita',
+          ),
+
+          // 3. SİPARİŞLER
           const BottomNavigationBarItem(
             icon: Icon(Icons.receipt_long),
             label: 'Siparişler',
           ),
 
-          // 3. BİLDİRİMLER (KIRMIZI ROZETLİ) 🔴
+          // 4. BİLDİRİMLER (KIRMIZI ROZETLİ) 🔴
           BottomNavigationBarItem(
             icon: StreamBuilder<QuerySnapshot>(
               // Sadece 'okunmamış' (isRead: false) bildirimleri dinliyoruz
@@ -117,7 +125,7 @@ class _CustomerMainLayoutState extends State<CustomerMainLayout> {
             label: 'Bildirimler',
           ),
 
-          // 4. PROFİL
+          // 5. PROFİL
           const BottomNavigationBarItem(
             icon: Icon(Icons.person),
             label: 'Profil',
