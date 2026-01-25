@@ -1,9 +1,10 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import '../auth/login_screen.dart';
 import '../business/business_home.dart';
 import '../customer/customer_main_layout.dart';
+import 'onboarding_screen.dart';
+import '../auth/login_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -19,9 +20,7 @@ class _SplashScreenState extends State<SplashScreen> {
     _checkUserAndNavigate();
   }
 
-  // Kullanıcıyı Kontrol Et ve Yönlendir
   void _checkUserAndNavigate() async {
-    // 2 Saniye logo görünsün diye bekleme (Animasyon hissi için)
     await Future.delayed(const Duration(seconds: 2));
 
     if (!mounted) return;
@@ -29,13 +28,11 @@ class _SplashScreenState extends State<SplashScreen> {
     User? user = FirebaseAuth.instance.currentUser;
 
     if (user != null) {
-      // Kullanıcı zaten giriş yapmış, rolünü öğrenip yönlendirelim
       _navigateBasedOnRole(user.uid);
     } else {
-      // Giriş yapmamış, Login ekranına git
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => const LoginScreen()),
+        MaterialPageRoute(builder: (context) => const OnboardingScreen()),
       );
     }
   }
@@ -45,6 +42,35 @@ class _SplashScreenState extends State<SplashScreen> {
       DocumentSnapshot userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
 
       if (userDoc.exists) {
+        // 1. BAN KONTROLÜ (GÜVENLİK SİSTEMİ 🚫)
+        bool isBanned = userDoc.get('isBanned') ?? false;
+
+        if (isBanned) {
+          if (!mounted) return;
+          // Oturumu kapat ve uyarı ver
+          await FirebaseAuth.instance.signOut();
+
+          showDialog(
+            context: context,
+            barrierDismissible: false, // Çarpıya basıp kapatamasın
+            builder: (ctx) => AlertDialog(
+              title: const Text("Hesabınız Askıya Alındı 🚫", style: TextStyle(color: Colors.red)),
+              content: const Text("Siparişleri 3 kez teslim almadığınız için hesabınız güvenlik gerekçesiyle kapatılmıştır. Destek için iletişime geçin."),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
+                  },
+                  child: const Text("Tamam"),
+                )
+              ],
+            ),
+          );
+          return; // İşlemi durdur
+        }
+
+        // 2. NORMAL YÖNLENDİRME
         String role = userDoc['role'];
         if (!mounted) return;
 
@@ -54,62 +80,48 @@ class _SplashScreenState extends State<SplashScreen> {
           Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const CustomerMainLayout()));
         }
       } else {
-        // Hata durumunda Login'e at
-        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
+        _goToOnboarding();
       }
     } catch (e) {
-      // İnternet yoksa veya hata varsa Login'e at
-      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
+      _goToOnboarding();
     }
+  }
+
+  void _goToOnboarding() {
+    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const OnboardingScreen()));
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white, // Arka plan rengi
+      backgroundColor: Colors.green,
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // LOGO KISMI
-            // Eğer elinde resim varsa: Image.asset('assets/logo.png') kullanabilirsin.
-            // Şimdilik şık bir ikon kullanıyoruz:
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: Colors.green.shade50,
-                shape: BoxShape.circle,
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(100),
+                  boxShadow: [
+                    BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 20, offset: const Offset(0, 10))
+                  ]
               ),
-              child: const Icon(
-                Icons.recycling, // Geri dönüşüm / Kurtarma ikonu
-                size: 80,
-                color: Colors.green,
-              ),
+              child: const Icon(Icons.restaurant_menu, size: 60, color: Colors.green),
             ),
-            const SizedBox(height: 20),
-
-            // UYGULAMA ADI
+            const SizedBox(height: 25),
             const Text(
-              "Lezzet Kurtar",
-              style: TextStyle(
-                fontSize: 32,
-                fontWeight: FontWeight.bold,
-                color: Colors.green,
-                letterSpacing: 1.2,
-              ),
+              "İndirKazan",
+              style: TextStyle(fontSize: 36, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 1.5),
             ),
             const SizedBox(height: 10),
-            const Text(
-              "İsrafı Önle, Lezzeti Yakala!",
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.grey,
-              ),
+            Text(
+              "Yemeği Kurtar, Dünyayı Koru",
+              style: TextStyle(fontSize: 16, color: Colors.white.withOpacity(0.9), fontStyle: FontStyle.italic),
             ),
-
-            const SizedBox(height: 50),
-            // YÜKLENİYOR ÇARK
-            const CircularProgressIndicator(color: Colors.green),
+            const SizedBox(height: 60),
+            const CircularProgressIndicator(color: Colors.white, strokeWidth: 3),
           ],
         ),
       ),

@@ -17,12 +17,30 @@ class _AddProductScreenState extends State<AddProductScreen> {
   final TextEditingController _originalPriceController = TextEditingController();
   final TextEditingController _discountedPriceController = TextEditingController();
   final TextEditingController _stockController = TextEditingController();
-  final TextEditingController _imageUrlController = TextEditingController(); // <-- YENİ: Resim Alanı
+  final TextEditingController _imageUrlController = TextEditingController();
+
+  // KATEGORİ LİSTESİ VE SEÇİMİ 📂
+  final List<String> _categories = [
+    'Ana Yemek',
+    'Fast Food',
+    'Tatlı',
+    'Unlu Mamül',
+    'İçecek',
+    'Market',
+    'Diğer'
+  ];
+  String? _selectedCategory; // Seçilen kategori burada tutulacak
 
   bool _isLoading = false;
 
   void _saveProduct() async {
     if (!_formKey.currentState!.validate()) return;
+
+    // Kategori seçilmediyse uyarı ver
+    if (_selectedCategory == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Lütfen bir kategori seçin! ⚠️")));
+      return;
+    }
 
     setState(() => _isLoading = true);
 
@@ -30,30 +48,27 @@ class _AddProductScreenState extends State<AddProductScreen> {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
 
-      // 1. İşletme Adını Çek
       final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
       final businessName = userDoc.data()?['businessName'] ?? 'Restoran';
 
-      // 2. Verileri Hazırla
       double originalPrice = double.tryParse(_originalPriceController.text) ?? 0.0;
       double discountedPrice = double.tryParse(_discountedPriceController.text) ?? 0.0;
       int stock = int.tryParse(_stockController.text) ?? 0;
 
-      // Resim yoksa varsayılan ikon koy
       String imageUrl = _imageUrlController.text.isNotEmpty
           ? _imageUrlController.text
           : 'https://cdn-icons-png.flaticon.com/512/2921/2921822.png';
 
-      // 3. Veritabanına Ekle (Doğrudan ekliyoruz, hata riskini azaltır)
       await FirebaseFirestore.instance.collection('products').add({
         'userId': user.uid,
-        'businessId': user.uid, // Sipariş sistemi için kritik
+        'businessId': user.uid,
         'businessName': businessName,
         'name': _nameController.text,
         'originalPrice': originalPrice,
         'discountedPrice': discountedPrice,
         'stock': stock,
-        'imageUrl': imageUrl, // <-- Resim kaydediliyor
+        'category': _selectedCategory, // <-- YENİ: Kategori kaydediliyor
+        'imageUrl': imageUrl,
         'status': 'active',
         'createdAt': FieldValue.serverTimestamp(),
       });
@@ -81,7 +96,6 @@ class _AddProductScreenState extends State<AddProductScreen> {
           key: _formKey,
           child: ListView(
             children: [
-              // Ürün Adı
               TextFormField(
                 controller: _nameController,
                 decoration: const InputDecoration(labelText: "Yemek Adı (Örn: Kıymalı Pide)", border: OutlineInputBorder()),
@@ -89,14 +103,30 @@ class _AddProductScreenState extends State<AddProductScreen> {
               ),
               const SizedBox(height: 15),
 
-              // Fiyatlar Yan Yana
+              // --- KATEGORİ SEÇİMİ (YENİ) ---
+              DropdownButtonFormField<String>(
+                value: _selectedCategory,
+                decoration: const InputDecoration(
+                  labelText: "Kategori Seçiniz",
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.category),
+                ),
+                items: _categories.map((cat) {
+                  return DropdownMenuItem(value: cat, child: Text(cat));
+                }).toList(),
+                onChanged: (val) => setState(() => _selectedCategory = val),
+              ),
+              // ------------------------------
+
+              const SizedBox(height: 15),
+
               Row(
                 children: [
                   Expanded(
                     child: TextFormField(
                       controller: _originalPriceController,
                       keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(labelText: "Normal Fiyat (TL)", border: OutlineInputBorder()),
+                      decoration: const InputDecoration(labelText: "Normal Fiyat", border: OutlineInputBorder()),
                       validator: (v) => v!.isEmpty ? "Giriniz" : null,
                     ),
                   ),
@@ -105,7 +135,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
                     child: TextFormField(
                       controller: _discountedPriceController,
                       keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(labelText: "Satış Fiyatı (TL)", border: OutlineInputBorder()),
+                      decoration: const InputDecoration(labelText: "Satış Fiyatı", border: OutlineInputBorder()),
                       validator: (v) => v!.isEmpty ? "Giriniz" : null,
                     ),
                   ),
@@ -113,7 +143,6 @@ class _AddProductScreenState extends State<AddProductScreen> {
               ),
               const SizedBox(height: 15),
 
-              // Stok
               TextFormField(
                 controller: _stockController,
                 keyboardType: TextInputType.number,
@@ -122,19 +151,16 @@ class _AddProductScreenState extends State<AddProductScreen> {
               ),
               const SizedBox(height: 15),
 
-              // YENİ: Resim URL Alanı
               TextFormField(
                 controller: _imageUrlController,
                 decoration: const InputDecoration(
                     labelText: "Resim Linki (Opsiyonel)",
                     border: OutlineInputBorder(),
-                    hintText: "https://ornek.com/resim.jpg",
                     helperText: "Boş bırakırsanız varsayılan ikon kullanılır."
                 ),
               ),
               const SizedBox(height: 25),
 
-              // Kaydet Butonu
               _isLoading
                   ? const Center(child: CircularProgressIndicator())
                   : ElevatedButton(

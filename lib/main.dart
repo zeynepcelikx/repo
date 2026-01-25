@@ -1,23 +1,19 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
-import 'screens/auth/login_screen.dart';
-import 'screens/common/splash_screen.dart';
+import 'screens/common/splash_screen.dart'; // Artık sadece Splash'i çağırmamız yeterli
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // DOSYA OKUMAK YERİNE BİLGİLERİ ELDEN VERİYORUZ
-  // Xcode dosyayı bulamasa bile bu yöntem %100 çalışır.
+  // --- FIREBASE BAŞLATMA ---
+  // (Manuel yapılandırma sayesinde dosya yolu hatalarından etkilenmez)
   try {
     await Firebase.initializeApp(
       options: const FirebaseOptions(
-        apiKey: "AIzaSyAIj0CCV0CuWIQxGke7wr18LEqo12HYsIg", // Plist içindeki API_KEY
-        appId: "1:883878657226:ios:e14aefe7d99ef60484c833", // Plist içindeki GOOGLE_APP_ID
-        messagingSenderId: "883878657226", // Plist içindeki GCM_SENDER_ID
-        projectId: "indirkazan-d1c8c", // Plist içindeki PROJECT_ID
-
-        // iOS için zorunlu değil ama varsa iyi olur (Yoksa bu satırı silebilirsin)
-        // storageBucket: "PROJE_ID.appspot.com",
+        apiKey: "AIzaSyAIj0CCV0CuWIQxGke7wr18LEqo12HYsIg",
+        appId: "1:883878657226:ios:e14aefe7d99ef60484c833",
+        messagingSenderId: "883878657226",
+        projectId: "indirkazan-d1c8c",
       ),
     );
     print("Firebase Başarıyla Bağlandı! 🚀");
@@ -34,12 +30,14 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'LezzetKurtar',
-      debugShowCheckedModeBanner: false,
+      title: 'İndirKazan', // Uygulama adı
+      debugShowCheckedModeBanner: false, // Sağ üstteki "Debug" bandını kaldırır
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.green), // Ana renk yeşil
         useMaterial3: true,
+        // Yazı tipleri veya genel stiller buraya eklenebilir
       ),
+      // Uygulama açılınca direkt Akıllı Splash Ekranına gider
       home: const SplashScreen(),
     );
   }
