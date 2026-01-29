@@ -49,5 +49,11 @@
     <string>QR Kod okuyarak sipariş teslimatı yapmak için kamera izni gerekiyor.</string>
     <key>NSLocationWhenInUseUsageDescription</key>
         <string>Dükkanınızın haritada görünebilmesi için konumunuzu kaydetmemiz gerekiyor.</string>
+    <key>NSPhotoLibraryUsageDescription</key>
+    	<string>Profil fotoğrafınızı değiştirmek için galeri erişimi gerekiyor.</string>
+    	<key>NSCameraUsageDescription</key>
+    	<string>Fotoğraf çekmek için kamera erişimi gerekiyor.</string>
+    	<key>NSMicrophoneUsageDescription</key>
+    	<string>Video kaydı için mikrofon erişimi gerekiyor.</string>
 </dict>
 </plist>

@@ -1,7 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:indirkazan/screens/business/scan_qr_screen.dart';
+
 
 class BusinessOrdersScreen extends StatefulWidget {
   const BusinessOrdersScreen({super.key});
@@ -11,391 +12,287 @@ class BusinessOrdersScreen extends StatefulWidget {
 }
 
 class _BusinessOrdersScreenState extends State<BusinessOrdersScreen> {
+  final Color aestheticGreen = const Color(0xFF4CAF50);
+  final Color darkBg = const Color(0xFF0C0C0C);
+  final Color surfaceColor = const Color(0xFF1E1E1E);
+  final Color warningColor = const Color(0xFFFFB74D);
+  final Color errorColor = const Color(0xFFCF6679);
 
-  // --- MÜŞTERİNİN RİSK DURUMUNU ÇEKME (DÜZELTİLDİ 🛠️) ---
-  // Artık alan yoksa hata vermez, 0 döndürür.
-  Future<int> _getCustomerWarnings(String customerId) async {
-    try {
-      DocumentSnapshot userDoc = await FirebaseFirestore.instance.collection('users').doc(customerId).get();
-      if (userDoc.exists) {
-        // Veriyi güvenli bir harita (Map) olarak alıyoruz
-        final data = userDoc.data() as Map<String, dynamic>?;
+  // --- FİLTRELEME DURUMU ---
+  String _filterStatus = 'all'; // 'all', 'active', 'ready', 'completed', 'issue'
 
-        // Eğer data boş değilse ve içinde 'warningCount' varsa onu al, yoksa 0 al.
-        if (data != null && data.containsKey('warningCount')) {
-          return data['warningCount'];
-        }
-      }
-    } catch (e) {
-      print("Kullanıcı risk verisi alınamadı: $e");
+  String _formatTime(dynamic timestamp) {
+    if (timestamp == null) return "";
+    DateTime date;
+    if (timestamp is Timestamp) {
+      date = timestamp.toDate();
+    } else if (timestamp is String) {
+      date = DateTime.tryParse(timestamp) ?? DateTime.now();
+    } else {
+      return "";
     }
-    return 0; // Hata olursa veya alan yoksa temiz say
+    return "${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}";
   }
 
-  // --- 1. SİPARİŞİ REDDET ---
-  void _rejectOrder(String orderId, String customerId, String productId, String productName) async {
-    try {
-      await FirebaseFirestore.instance.collection('orders').doc(orderId).update({
-        'status': 'rejected',
-      });
-
-      await FirebaseFirestore.instance.collection('products').doc(productId).update({
-        'stock': FieldValue.increment(1),
-      });
-
-      await FirebaseFirestore.instance.collection('users').doc(customerId).collection('notifications').add({
-        'title': 'Siparişiniz İptal Edildi ❌',
-        'body': 'Üzgünüz, işletme $productName siparişini hazırlayamadığı için iptal etti.',
-        'date': FieldValue.serverTimestamp(),
-        'isRead': false,
-      });
-
-      if(!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Sipariş reddedildi ve stok iade edildi.")));
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Hata: $e")));
-    }
+  // --- FİLTRE PENCERESİ AÇ ---
+  void _showFilterDialog() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: surfaceColor,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) {
+        return Container(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text("Siparişleri Filtrele 🌪️", style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+                  IconButton(onPressed: () => Navigator.pop(ctx), icon: const Icon(Icons.close, color: Colors.white54))
+                ],
+              ),
+              const SizedBox(height: 16),
+              _buildFilterOption(ctx, "Tümü", 'all', Icons.list),
+              _buildFilterOption(ctx, "Hazırlanıyor", 'active', Icons.soup_kitchen),
+              _buildFilterOption(ctx, "Müşteri Bekleniyor", 'ready', Icons.hourglass_bottom),
+              _buildFilterOption(ctx, "Teslim Edilenler", 'completed', Icons.check_circle),
+              _buildFilterOption(ctx, "Sorunlu / Gelmedi", 'issue', Icons.warning),
+            ],
+          ),
+        );
+      },
+    );
   }
 
-  // --- 2. SİPARİŞİ 'HAZIRLANDI' YAP ---
-  void _markAsReady(String orderId, String customerId, String productName) async {
-    try {
-      await FirebaseFirestore.instance.collection('orders').doc(orderId).update({
-        'status': 'ready',
-      });
-
-      await FirebaseFirestore.instance.collection('users').doc(customerId).collection('notifications').add({
-        'title': 'Siparişiniz Hazır! 🛍️',
-        'body': '$productName paketlendi. QR Kodunuzla teslim alabilirsiniz.',
-        'date': FieldValue.serverTimestamp(),
-        'isRead': false,
-      });
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Müşteriye hazır bildirimi gitti!")));
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Hata: $e")));
-    }
+  Widget _buildFilterOption(BuildContext ctx, String label, String value, IconData icon) {
+    bool isSelected = _filterStatus == value;
+    return ListTile(
+      leading: Icon(icon, color: isSelected ? aestheticGreen : Colors.white54),
+      title: Text(label, style: TextStyle(color: isSelected ? aestheticGreen : Colors.white70, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
+      trailing: isSelected ? Icon(Icons.check, color: aestheticGreen) : null,
+      onTap: () {
+        setState(() => _filterStatus = value);
+        Navigator.pop(ctx);
+      },
+    );
   }
 
-  // --- 3. MÜŞTERİ GELMEDİ (CEZA SİSTEMİ - GÜVENLİ HALE GETİRİLDİ 🛡️) ---
-  void _markAsNoShow(String orderId, String customerId, String productId, String productName) async {
+  // --- DİĞER FONKSİYONLAR (NO-SHOW, REDDET VB.) ---
+  Future<void> _handleNoShow(String orderId, String customerId) async {
     bool? confirm = await showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text("Müşteri Gelmedi mi? ⚠️"),
-        content: const Text("Bu işlem müşteriye 1 uyarı puanı verecek ve stok tekrar satışa açılacak. Onaylıyor musunuz?"),
+        backgroundColor: surfaceColor,
+        title: const Text("Müşteri Gelmedi mi?", style: TextStyle(color: Colors.white)),
+        content: const Text("Bu işlem müşteriye uyarı puanı ekleyecek, BİLDİRİM GÖNDERECEK ve siparişi 'Gelmedi' olarak işaretleyecektir.", style: TextStyle(color: Colors.white70)),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Vazgeç")),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("Evet, Gelmedi", style: TextStyle(color: Colors.red))),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Vazgeç", style: TextStyle(color: Colors.white54))),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text("Evet, İşaretle", style: TextStyle(color: warningColor, fontWeight: FontWeight.bold))),
         ],
       ),
     );
 
-    if (confirm != true) return;
+    if (confirm == true) {
+      try {
+        DocumentReference userRef = FirebaseFirestore.instance.collection('users').doc(customerId);
+        DocumentReference orderRef = FirebaseFirestore.instance.collection('orders').doc(orderId);
 
-    try {
-      // A. Sipariş Durumu
-      await FirebaseFirestore.instance.collection('orders').doc(orderId).update({
-        'status': 'no_show',
-        'causedWarning': true,
-      });
+        await FirebaseFirestore.instance.runTransaction((transaction) async {
+          DocumentSnapshot userSnapshot = await transaction.get(userRef);
+          if (userSnapshot.exists) {
+            Map<String, dynamic> userData = userSnapshot.data() as Map<String, dynamic>;
+            int currentWarnings = userData['warningCount'] ?? 0;
+            int newWarnings = currentWarnings + 1;
+            bool isBanned = newWarnings >= 3;
 
-      // B. Stok İadesi
-      await FirebaseFirestore.instance.collection('products').doc(productId).update({
-        'stock': FieldValue.increment(1),
-      });
-
-      // C. KULLANICIYA UYARI PUANI EKLE (GÜVENLİ TRANSACTION)
-      DocumentReference userRef = FirebaseFirestore.instance.collection('users').doc(customerId);
-
-      await FirebaseFirestore.instance.runTransaction((transaction) async {
-        DocumentSnapshot snapshot = await transaction.get(userRef);
-
-        if (!snapshot.exists) return; // Kullanıcı yoksa işlem yapma
-
-        // Veriyi güvenli oku
-        final data = snapshot.data() as Map<String, dynamic>?;
-        int currentWarnings = 0;
-
-        if (data != null && data.containsKey('warningCount')) {
-          currentWarnings = data['warningCount'];
-        }
-
-        int newWarnings = currentWarnings + 1;
-        bool shouldBan = newWarnings >= 3;
-
-        // Güncelle
-        transaction.update(userRef, {
-          'warningCount': newWarnings,
-          'isBanned': shouldBan,
+            transaction.update(userRef, {'warningCount': newWarnings, 'isBanned': isBanned});
+            DocumentReference newNotifRef = userRef.collection('notifications').doc();
+            transaction.set(newNotifRef, {
+              'title': isBanned ? 'HESABINIZ KAPATILDI 🛑' : 'Sipariş Teslim Alınmadı ⚠️',
+              'body': isBanned ? '3. uyarı kotanızı doldurduğunuz için hesabınız kapatılmıştır.' : 'Siparişinizi teslim almadığınız için uyarı aldınız. ($newWarnings/3)',
+              'isRead': false,
+              'type': 'warning',
+              'timestamp': FieldValue.serverTimestamp(),
+            });
+          }
+          transaction.update(orderRef, {'status': 'issue'});
         });
-      });
-
-      // D. Bildirim
-      await userRef.collection('notifications').add({
-        'title': 'Uyarı Aldınız! ⚠️',
-        'body': 'Siparişi almadığınız için 1 uyarı puanı aldınız. 3 olunca hesabınız kapanacak!',
-        'date': FieldValue.serverTimestamp(),
-        'isRead': false,
-      });
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Müşteriye uyarı verildi ve stok açıldı.")));
-
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Hata: $e")));
+        if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: const Text("Müşteriye uyarı verildi."), backgroundColor: warningColor));
+      } catch (e) {
+        debugPrint("Hata: $e");
+      }
     }
   }
 
-  // --- 4. QR TARAMA VE TESLİM ---
-  void _scanAndComplete(String orderId, String customerId, String productName) async {
-    final scannedCode = await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const VerificationScanner()),
+  Future<void> _rejectOrder(String orderId) async {
+    bool? confirm = await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: surfaceColor,
+        title: const Text("Siparişi Reddet", style: TextStyle(color: Colors.white)),
+        content: const Text("Siparişi reddetmek istediğinize emin misiniz?", style: TextStyle(color: Colors.white70)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Vazgeç", style: TextStyle(color: Colors.white54))),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text("Reddet", style: TextStyle(color: errorColor, fontWeight: FontWeight.bold))),
+        ],
+      ),
     );
-
-    if (scannedCode == null) return;
-
-    if (scannedCode == orderId) {
-      _completeOrder(orderId, customerId, productName);
-    } else {
-      if (!mounted) return;
-      showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text("Hatalı QR Kod ⚠️", style: TextStyle(color: Colors.red)),
-          content: const Text("Okuttuğunuz kod bu siparişe ait değil!"),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Tamam"))
-          ],
-        ),
-      );
-    }
+    if (confirm == true) await FirebaseFirestore.instance.collection('orders').doc(orderId).update({'status': 'declined'});
   }
 
-  void _completeOrder(String orderId, String customerId, String productName) async {
-    try {
-      await FirebaseFirestore.instance.collection('orders').doc(orderId).update({
-        'status': 'completed',
-      });
-
-      await FirebaseFirestore.instance.collection('users').doc(customerId).collection('notifications').add({
-        'title': 'Afiyet Olsun! 🍽️',
-        'body': '$productName başarıyla teslim edildi.',
-        'date': FieldValue.serverTimestamp(),
-        'isRead': false,
-      });
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Doğrulandı ve Teslim Edildi! ✅")));
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Hata: $e")));
-    }
+  Future<void> _updateStatus(String orderId, String newStatus) async {
+    await FirebaseFirestore.instance.collection('orders').doc(orderId).update({'status': newStatus});
   }
 
   @override
   Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
+    User? user = FirebaseAuth.instance.currentUser;
 
     return Scaffold(
-      appBar: AppBar(title: const Text("Gelen Siparişler 🛎️")),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('orders')
-            .where('sellerId', isEqualTo: user?.uid)
-            .orderBy('orderDate', descending: true)
-            .snapshots(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-            return const Center(child: Text("Henüz sipariş yok."));
-          }
-
-          final orders = snapshot.data!.docs;
-
-          return ListView.builder(
-            padding: const EdgeInsets.all(10),
-            itemCount: orders.length,
-            itemBuilder: (context, index) {
-              final order = orders[index].data() as Map<String, dynamic>;
-              final orderId = orders[index].id;
-
-              String status = order['status'] ?? 'preparing';
-              if (status == 'active') status = 'preparing';
-
-              String customerPhone = order['customerPhone'] ?? 'Numara Yok';
-              String customerId = order['customerId'];
-
-              Color cardColor = Colors.white;
-              Widget statusWidget;
-
-              if (status == 'canceled') {
-                cardColor = Colors.red.shade50;
-                statusWidget = const Text("MÜŞTERİ İPTAL ETTİ ❌", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold));
-              } else if (status == 'rejected') {
-                cardColor = Colors.orange.shade50;
-                statusWidget = const Text("REDDETTİNİZ 🚫", style: TextStyle(color: Colors.deepOrange, fontWeight: FontWeight.bold));
-              } else if (status == 'no_show') {
-                cardColor = Colors.grey.shade300;
-                statusWidget = const Text("GELMEDİ (UYARI VERİLDİ) ⚠️", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold));
-              } else if (status == 'completed') {
-                cardColor = Colors.green.shade50;
-                statusWidget = const Text("TESLİM EDİLDİ ✅", style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold));
-              } else {
-                statusWidget = const SizedBox();
-              }
-
-              return Card(
-                elevation: 3,
-                color: cardColor,
-                margin: const EdgeInsets.only(bottom: 15),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                child: Padding(
-                  padding: const EdgeInsets.all(15.0),
-                  child: Column(
+      backgroundColor: darkBg,
+      body: SafeArea(
+        child: Column(
+          children: [
+            // --- HEADER ---
+            Container(
+              padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      // ÜST KISIM
-                      Row(
-                        children: [
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(10),
-                            child: Image.network(
-                              order['imageUrl'] ?? '',
-                              width: 60, height: 60, fit: BoxFit.cover,
-                              errorBuilder: (c, o, s) => const Icon(Icons.fastfood),
-                            ),
+                      const Text("Gelen Siparişler 🔔", style: TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+
+                      // --- FİLTRE İKONU (ARTIK İŞLEVSEL) ---
+                      GestureDetector(
+                        onTap: _showFilterDialog, // Menüyü açar
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: _filterStatus == 'all' ? Colors.white.withOpacity(0.05) : aestheticGreen.withOpacity(0.2), // Filtre varsa yeşil yanar
+                            shape: BoxShape.circle,
+                            border: _filterStatus != 'all' ? Border.all(color: aestheticGreen) : null,
                           ),
-                          const SizedBox(width: 15),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(order['productName'] ?? 'Ürün', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                                const SizedBox(height: 5),
-
-                                // MÜŞTERİ BİLGİSİ VE RİSK PUANI 🕵️‍♂️
-                                FutureBuilder<int>(
-                                  future: _getCustomerWarnings(customerId),
-                                  builder: (context, snapshot) {
-                                    int warnings = snapshot.data ?? 0;
-                                    Color riskColor = warnings == 0 ? Colors.green : (warnings < 3 ? Colors.orange : Colors.red);
-
-                                    // Sadece uyarı varsa rozet göster
-                                    if (warnings == 0) {
-                                      return Row(children: [
-                                        const Icon(Icons.person, size: 14, color: Colors.grey),
-                                        const SizedBox(width: 5),
-                                        Expanded(child: Text(order['customerEmail'] ?? 'Bilinmiyor', style: const TextStyle(fontSize: 12))),
-                                      ]);
-                                    }
-
-                                    return Row(
-                                      children: [
-                                        const Icon(Icons.person, size: 14, color: Colors.grey),
-                                        const SizedBox(width: 5),
-                                        Expanded(child: Text(order['customerEmail'] ?? 'Bilinmiyor', style: const TextStyle(fontSize: 12))),
-                                        Container(
-                                          margin: const EdgeInsets.only(left: 5),
-                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                          decoration: BoxDecoration(color: riskColor, borderRadius: BorderRadius.circular(8)),
-                                          child: Text("$warnings Uyarı!", style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
-                                        )
-                                      ],
-                                    );
-                                  },
-                                ),
-                                Row(children: [
-                                  const Icon(Icons.phone, size: 14, color: Colors.blue),
-                                  const SizedBox(width: 5),
-                                  Text(customerPhone, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blue)),
-                                ]),
-                                const SizedBox(height: 5),
-                                Text("${order['price']} ₺", style: const TextStyle(color: Colors.black54, fontWeight: FontWeight.bold)),
-                              ],
-                            ),
-                          ),
-                        ],
+                          child: Icon(Icons.filter_list, color: _filterStatus == 'all' ? Colors.white54 : aestheticGreen, size: 20),
+                        ),
                       ),
-                      const Divider(),
-
-                      // --- BUTONLAR ---
-                      if (status == 'preparing') ...[
-                        const Text("Durum: Hazırlanıyor 👨‍🍳", style: TextStyle(color: Colors.orange)),
-                        const SizedBox(height: 10),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: ElevatedButton(
-                                style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade400),
-                                onPressed: () => _rejectOrder(orderId, customerId, order['productId'], order['productName']),
-                                child: const Text("REDDET", style: TextStyle(color: Colors.white, fontSize: 12)),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              flex: 2,
-                              child: ElevatedButton(
-                                style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
-                                onPressed: () => _markAsReady(orderId, customerId, order['productName']),
-                                child: const Text("HAZIRLANDI 📦", style: TextStyle(color: Colors.white)),
-                              ),
-                            ),
-                          ],
-                        )
-                      ] else if (status == 'ready') ...[
-                        const Text("Müşteri bekleniyor... 🛍️", style: TextStyle(color: Colors.blue)),
-                        const SizedBox(height: 10),
-                        Column(
-                          children: [
-                            SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton.icon(
-                                style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                                onPressed: () => _scanAndComplete(orderId, customerId, order['productName']),
-                                icon: const Icon(Icons.qr_code_scanner, color: Colors.white),
-                                label: const Text("QR İLE TESLİM ET", style: TextStyle(color: Colors.white)),
-                              ),
-                            ),
-                            const SizedBox(height: 5),
-                            TextButton.icon(
-                              onPressed: () => _markAsNoShow(orderId, customerId, order['productId'], order['productName']),
-                              icon: const Icon(Icons.warning_amber_rounded, color: Colors.red),
-                              label: const Text("Müşteri Gelmedi (Stok İade Et & Uyar)", style: TextStyle(color: Colors.red, fontSize: 12)),
-                            )
-                          ],
-                        )
-                      ] else ...[
-                        statusWidget
-                      ]
                     ],
                   ),
-                ),
-              );
-            },
-          );
-        },
+                  const SizedBox(height: 8),
+                  StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore.instance
+                        .collection('orders')
+                        .where('sellerId', isEqualTo: user?.uid)
+                        .where('status', whereIn: ['active', 'ready'])
+                        .snapshots(),
+                    builder: (context, snapshot) {
+                      int count = 0;
+                      if (snapshot.hasData) count = snapshot.data!.docs.length;
+                      return Text("Bugün $count aktif siparişiniz var", style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 14, fontWeight: FontWeight.w500));
+                    },
+                  ),
+                ],
+              ),
+            ),
+
+            // --- SİPARİŞ LİSTESİ ---
+            Expanded(
+              child: StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance
+                    .collection('orders')
+                    .where('sellerId', isEqualTo: user?.uid)
+                    .orderBy('orderDate', descending: true)
+                    .snapshots(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return Center(child: CircularProgressIndicator(color: aestheticGreen));
+                  }
+                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                    return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.receipt_long, size: 80, color: Colors.white.withOpacity(0.1)), const SizedBox(height: 16), Text("Henüz sipariş yok.", style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 16))]));
+                  }
+
+                  // VERİLERİ AL VE FİLTRELE (Client-Side Filtering)
+                  var docs = snapshot.data!.docs;
+
+                  if (_filterStatus != 'all') {
+                    docs = docs.where((doc) {
+                      var data = doc.data() as Map<String, dynamic>;
+                      return data['status'] == _filterStatus;
+                    }).toList();
+                  }
+
+                  if (docs.isEmpty) {
+                    return Center(child: Text("Bu kriterde sipariş yok.", style: TextStyle(color: Colors.white.withOpacity(0.5))));
+                  }
+
+                  return ListView.builder(
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 80),
+                    itemCount: docs.length,
+                    itemBuilder: (context, index) {
+                      var doc = docs[index];
+                      var data = doc.data() as Map<String, dynamic>;
+                      data['id'] = doc.id;
+                      return _buildOrderCard(data);
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
-}
 
-class VerificationScanner extends StatelessWidget {
-  const VerificationScanner({super.key});
+  // --- SİPARİŞ KARTI ---
+  Widget _buildOrderCard(Map<String, dynamic> data) {
+    String status = data['status'] ?? 'active';
+    String productName = data['productName'] ?? 'Ürün';
+    double price = double.tryParse(data['price'].toString()) ?? 0.0;
+    String imageUrl = data['imageUrl'] ?? 'https://cdn-icons-png.flaticon.com/512/2921/2921822.png';
+    String customerId = data['customerId'] ?? '';
+    String orderId = data['id'];
+    String timeText = _formatTime(data['orderDate']);
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text("QR Kodu Okutun 📸")),
-      body: MobileScanner(
-        onDetect: (capture) {
-          final List<Barcode> barcodes = capture.barcodes;
-          if (barcodes.isNotEmpty && barcodes.first.rawValue != null) {
-            final String code = barcodes.first.rawValue!;
-            Navigator.pop(context, code);
-          }
-        },
-      ),
+    Color statusColor = Colors.grey;
+    String statusText = "BİLİNMİYOR";
+    IconData statusIcon = Icons.help;
+
+    if (status == 'active') { statusColor = Colors.blue; statusText = "HAZIRLANIYOR"; statusIcon = Icons.soup_kitchen; }
+    else if (status == 'ready') { statusColor = const Color(0xFF00E5FF); statusText = "MÜŞTERİ BEKLENİYOR"; statusIcon = Icons.hourglass_bottom; }
+    else if (status == 'completed') { statusColor = aestheticGreen; statusText = "TESLİM EDİLDİ"; statusIcon = Icons.check_circle; }
+    else if (status == 'issue') { statusColor = warningColor; statusText = "GELMEDİ (UYARI VERİLDİ)"; statusIcon = Icons.warning; }
+    else if (status == 'declined') { statusColor = errorColor; statusText = "REDDEDİLDİ"; statusIcon = Icons.cancel; }
+
+    return FutureBuilder<DocumentSnapshot>(
+      future: FirebaseFirestore.instance.collection('users').doc(customerId).get(),
+      builder: (context, snapshot) {
+        String customerInfo = "Yükleniyor...";
+        int warningCount = 0;
+        if (snapshot.hasData && snapshot.data!.exists) {
+          var userData = snapshot.data!.data() as Map<String, dynamic>;
+          customerInfo = userData['email'] ?? userData['name'] ?? 'Müşteri';
+          warningCount = userData['warningCount'] ?? 0;
+        }
+
+        return Container(
+          margin: const EdgeInsets.only(bottom: 20),
+          decoration: BoxDecoration(color: surfaceColor.withOpacity(0.6), borderRadius: BorderRadius.circular(24), border: Border.all(color: status == 'completed' ? aestheticGreen.withOpacity(0.3) : status == 'issue' ? warningColor.withOpacity(0.3) : Colors.white.withOpacity(0.08), width: 1), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 15, offset: const Offset(0, 5))]),
+          child: Column(
+            children: [
+              Padding(padding: const EdgeInsets.all(16), child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [Container(width: 80, height: 80, decoration: BoxDecoration(borderRadius: BorderRadius.circular(20), color: Colors.white.withOpacity(0.05), image: DecorationImage(image: NetworkImage(imageUrl), fit: BoxFit.cover))), const SizedBox(width: 16), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Expanded(child: Text(productName, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis)), if (warningCount > 0) Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: warningColor.withOpacity(0.2), borderRadius: BorderRadius.circular(8), border: Border.all(color: warningColor.withOpacity(0.5))), child: Text("$warningCount Uyarı!", style: TextStyle(color: warningColor, fontSize: 10, fontWeight: FontWeight.bold)))]), const SizedBox(height: 6), Row(children: [Icon(Icons.person, size: 14, color: Colors.white.withOpacity(0.4)), const SizedBox(width: 4), Expanded(child: Text(customerInfo, style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis))]), const SizedBox(height: 12), Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text("${price.toStringAsFixed(2)}₺", style: TextStyle(color: aestheticGreen, fontSize: 18, fontWeight: FontWeight.bold)), Text(timeText, style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 12, fontWeight: FontWeight.w600))])]))])),
+              Container(height: 1, width: double.infinity, color: Colors.white.withOpacity(0.05)),
+              if (status == 'active') Padding(padding: const EdgeInsets.all(8.0), child: Row(children: [Expanded(flex: 2, child: TextButton(onPressed: () => _rejectOrder(orderId), child: Text("REDDET", style: TextStyle(color: errorColor, fontWeight: FontWeight.bold)))), Expanded(flex: 3, child: ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Colors.blue.withOpacity(0.2), side: const BorderSide(color: Colors.blue), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), onPressed: () => _updateStatus(orderId, 'ready'), child: const Text("HAZIRLANDI", style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold))))]))
+              else if (status == 'ready') Padding(padding: const EdgeInsets.all(8.0), child: Row(children: [Expanded(flex: 2, child: TextButton(onPressed: () => _handleNoShow(orderId, customerId), child: Text("GELMEDİ", style: TextStyle(color: warningColor, fontWeight: FontWeight.bold)))), Expanded(flex: 3, child: ElevatedButton.icon(icon: Icon(Icons.qr_code_scanner, color: aestheticGreen), label: Text("TESLİM ET (QR)", style: TextStyle(color: aestheticGreen, fontWeight: FontWeight.bold)), style: ElevatedButton.styleFrom(backgroundColor: aestheticGreen.withOpacity(0.1), side: BorderSide(color: aestheticGreen), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), onPressed: () { Navigator.push(context, MaterialPageRoute(builder: (_) => const ScanQrScreen())); }))]))
+              else Container(width: double.infinity, padding: const EdgeInsets.symmetric(vertical: 12), decoration: BoxDecoration(color: statusColor.withOpacity(0.1), borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24))), child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(statusIcon, color: statusColor, size: 16), const SizedBox(width: 8), Text(statusText, style: TextStyle(color: statusColor, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1))]))
+            ],
+          ),
+        );
+      },
     );
   }
 }

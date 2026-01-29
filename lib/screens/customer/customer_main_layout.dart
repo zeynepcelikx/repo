@@ -3,7 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'customer_home.dart';
 import 'my_orders_screen.dart';
-import 'customer_map_screen.dart'; // <-- Harita ekranı importu
+import 'customer_map_screen.dart';
 import '../common/notifications_screen.dart';
 import '../common/profile_screen.dart';
 
@@ -18,6 +18,10 @@ class _CustomerMainLayoutState extends State<CustomerMainLayout> {
   int _selectedIndex = 0; // Varsayılan: Keşfet Sayfası
   final User? user = FirebaseAuth.instance.currentUser;
 
+  // Tasarım Renkleri
+  final Color aestheticGreen = const Color(0xFF4CAF50);
+  final Color darkBg = const Color(0xFF0C0C0C);
+
   late final List<Widget> _pages;
 
   @override
@@ -26,7 +30,7 @@ class _CustomerMainLayoutState extends State<CustomerMainLayout> {
     // Sayfaların sırası: Keşfet -> Harita -> Siparişler -> Bildirimler -> Profil
     _pages = [
       const CustomerHomeScreen(),    // 0
-      const CustomerMapScreen(),     // 1 (YENİDEN EKLENDİ 🗺️)
+      const CustomerMapScreen(),     // 1
       const MyOrdersScreen(),        // 2
       const NotificationsScreen(),   // 3
       const ProfileScreen(),         // 4
@@ -42,95 +46,116 @@ class _CustomerMainLayoutState extends State<CustomerMainLayout> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: darkBg, // Tüm ekranın arka planı
+
       // Seçili sayfayı göster
       body: _pages[_selectedIndex],
 
-      // --- ALT MENÜ ---
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _selectedIndex,
-        onTap: _onItemTapped,
-        selectedItemColor: Colors.green, // Aktif ikon rengi
-        unselectedItemColor: Colors.grey, // Pasif ikon rengi
-        type: BottomNavigationBarType.fixed, // 5 ikon olduğu için sabit tip şart
-        items: [
-          // 1. KEŞFET
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.home),
-            label: 'Keşfet',
+      // --- SİYAH ALT MENÜ (NAV BAR) ---
+      bottomNavigationBar: Theme(
+        // Nav bar için özel tema ayarı (Çizgiyi kaldırmak ve renkleri oturtmak için)
+        data: Theme.of(context).copyWith(
+          canvasColor: darkBg, // Menü arka plan rengi
+          textTheme: Theme.of(context).textTheme.copyWith(
+            bodySmall: const TextStyle(color: Colors.white54),
           ),
-
-          // 2. HARİTA (GERİ GELDİ) 🗺️
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.map_outlined),
-            label: 'Harita',
+        ),
+        child: Container(
+          // Üst tarafa ince bir çizgi ekleyerek menüyü içerikten ayıralım
+          decoration: BoxDecoration(
+            border: Border(top: BorderSide(color: Colors.white.withOpacity(0.1), width: 0.5)),
           ),
+          child: BottomNavigationBar(
+            currentIndex: _selectedIndex,
+            onTap: _onItemTapped,
 
-          // 3. SİPARİŞLER
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.receipt_long),
-            label: 'Siparişler',
-          ),
+            // Renk Ayarları
+            backgroundColor: darkBg, // Siyah Arka Plan 🖤
+            selectedItemColor: aestheticGreen, // Aktif İkon Yeşili 💚
+            unselectedItemColor: Colors.grey.shade600, // Pasif İkon Gri
 
-          // 4. BİLDİRİMLER (KIRMIZI ROZETLİ) 🔴
-          BottomNavigationBarItem(
-            icon: StreamBuilder<QuerySnapshot>(
-              // Sadece 'okunmamış' (isRead: false) bildirimleri dinliyoruz
-              stream: FirebaseFirestore.instance
-                  .collection('users')
-                  .doc(user?.uid)
-                  .collection('notifications')
-                  .where('isRead', isEqualTo: false)
-                  .snapshots(),
-              builder: (context, snapshot) {
-                int unreadCount = 0;
-                if (snapshot.hasData) {
-                  unreadCount = snapshot.data!.docs.length;
-                }
+            type: BottomNavigationBarType.fixed, // 5 ikon olduğu için sabit tip
+            elevation: 0, // Gölgeyi kaldırdık (Daha flat ve modern durur)
 
-                // Stack kullanarak ikonun üzerine kırmızı yuvarlak koyuyoruz
-                return Stack(
-                  children: [
-                    const Icon(Icons.notifications), // Ana Zil İkonu
+            items: [
+              // 1. KEŞFET
+              const BottomNavigationBarItem(
+                icon: Icon(Icons.home_filled),
+                label: 'Keşfet',
+              ),
 
-                    if (unreadCount > 0) // Sadece okunmamış varsa göster
-                      Positioned(
-                        right: 0,
-                        top: 0,
-                        child: Container(
-                          padding: const EdgeInsets.all(2),
-                          decoration: BoxDecoration(
-                            color: Colors.red,
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: Colors.white, width: 1), // Beyaz çerçeve
-                          ),
-                          constraints: const BoxConstraints(
-                            minWidth: 16,
-                            minHeight: 16,
-                          ),
-                          child: Text(
-                            '$unreadCount', // Bildirim Sayısı
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
+              // 2. HARİTA
+              const BottomNavigationBarItem(
+                icon: Icon(Icons.map_outlined),
+                label: 'Harita',
+              ),
+
+              // 3. SİPARİŞLER
+              const BottomNavigationBarItem(
+                icon: Icon(Icons.receipt_long),
+                label: 'Siparişler',
+              ),
+
+              // 4. BİLDİRİMLER (KIRMIZI ROZETLİ)
+              BottomNavigationBarItem(
+                icon: StreamBuilder<QuerySnapshot>(
+                  stream: FirebaseFirestore.instance
+                      .collection('users')
+                      .doc(user?.uid)
+                      .collection('notifications')
+                      .where('isRead', isEqualTo: false)
+                      .snapshots(),
+                  builder: (context, snapshot) {
+                    int unreadCount = 0;
+                    if (snapshot.hasData) {
+                      unreadCount = snapshot.data!.docs.length;
+                    }
+
+                    return Stack(
+                      children: [
+                        const Icon(Icons.notifications_outlined), // Ana Zil İkonu
+
+                        if (unreadCount > 0)
+                          Positioned(
+                            right: 0,
+                            top: 0,
+                            child: Container(
+                              padding: const EdgeInsets.all(2),
+                              decoration: BoxDecoration(
+                                color: Colors.red,
+                                shape: BoxShape.circle,
+                                border: Border.all(color: darkBg, width: 1.5), // Siyah çerçeve (ikonun üstünde belli olsun diye)
+                              ),
+                              constraints: const BoxConstraints(
+                                minWidth: 16,
+                                minHeight: 16,
+                              ),
+                              child: Text(
+                                '$unreadCount',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
                             ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
-                      )
-                  ],
-                );
-              },
-            ),
-            label: 'Bildirimler',
-          ),
+                          )
+                      ],
+                    );
+                  },
+                ),
+                label: 'Bildirimler',
+              ),
 
-          // 5. PROFİL
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.person),
-            label: 'Profil',
+              // 5. PROFİL
+              const BottomNavigationBarItem(
+                icon: Icon(Icons.person_outline),
+                label: 'Profil',
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
