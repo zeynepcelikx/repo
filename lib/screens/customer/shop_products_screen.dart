@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'product_detail_screen.dart'; // Detay sayfası import edildi
 
 class ShopProductsScreen extends StatefulWidget {
   final String sellerId;
@@ -64,48 +65,63 @@ class _ShopProductsScreenState extends State<ShopProductsScreen> {
               var doc = snapshot.data!.docs[index];
               var data = doc.data() as Map<String, dynamic>;
 
-              return Container(
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.05),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: Colors.white.withOpacity(0.1)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Ürün Resmi
-                    Expanded(
-                      child: Container(
-                        decoration: BoxDecoration(
-                          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-                          image: DecorationImage(
-                            image: NetworkImage(data['imageUrl'] ?? 'https://cdn-icons-png.flaticon.com/512/1160/1160358.png'),
-                            fit: BoxFit.cover,
+              // Ürün ID'sini dataya ekliyoruz ki detay sayfasında kullanabilelim
+              data['id'] = doc.id;
+
+              // --- TIKLANABİLİR ALAN (GestureDetector) EKLENDİ ---
+              return GestureDetector(
+                onTap: () {
+                  // Detay sayfasına yönlendirme
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => ProductDetailScreen(productData: data),
+                    ),
+                  );
+                },
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.05),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.white.withOpacity(0.1)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Ürün Resmi
+                      Expanded(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                            image: DecorationImage(
+                              image: NetworkImage(data['imageUrl'] ?? 'https://cdn-icons-png.flaticon.com/512/1160/1160358.png'),
+                              fit: BoxFit.cover,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                    // Bilgiler
-                    Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            data['name'] ?? 'Ürün',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            "${data['price']}₺",
-                            style: TextStyle(color: aestheticGreen, fontWeight: FontWeight.bold, fontSize: 14),
-                          ),
-                        ],
+                      // Bilgiler
+                      Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              data['name'] ?? 'Ürün',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              "${data['price']}₺",
+                              style: TextStyle(color: aestheticGreen, fontWeight: FontWeight.bold, fontSize: 14),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               );
             },

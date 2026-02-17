@@ -246,7 +246,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     ),
                     onPressed: _nextPage,
                     child: Text(
-                      _currentPage == _pages.length - 1 ? "BAŞLA 🚀" : "İLERİ",
+                      _currentPage == _pages.length - 1 ? "BAŞLA " : "İLERİ",
                       style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w900,

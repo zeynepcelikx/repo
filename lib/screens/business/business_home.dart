@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 // Diğer sayfaları import ediyoruz
 import 'add_product_screen.dart';
+import 'edit_product_screen.dart';
 import 'business_orders_screen.dart';
 import 'business_settings_screen.dart';
 import '../common/notifications_screen.dart';
@@ -20,17 +21,16 @@ class _BusinessHomeScreenState extends State<BusinessHomeScreen> {
   final Color darkBg = const Color(0xFF0C0C0C);
 
   int _selectedIndex = 0;
-
   late final List<Widget> _pages;
 
   @override
   void initState() {
     super.initState();
     _pages = [
-      _buildProductsTab(),        // 0: Ürün Yönetimi
-      const BusinessOrdersScreen(), // 1: Siparişler
-      const NotificationsScreen(),  // 2: Bildirimler
-      const BusinessSettingsScreen(), // 3: Dükkan Ayarları
+      _buildHomeTab(),
+      const BusinessOrdersScreen(),
+      const NotificationsScreen(),
+      const BusinessSettingsScreen(),
     ];
   }
 
@@ -40,162 +40,15 @@ class _BusinessHomeScreenState extends State<BusinessHomeScreen> {
     });
   }
 
-  // --- LOGIC: ÜRÜN SİLME ---
-  Future<void> _deleteProduct(String productId) async {
-    bool? confirm = await showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1E1E),
-        title: const Text("Ürünü Sil", style: TextStyle(color: Colors.white)),
-        content: const Text("Bu ürünü silmek istediğinize emin misiniz?", style: TextStyle(color: Colors.white70)),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Vazgeç", style: TextStyle(color: Colors.white54))),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text("Sil", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm == true) {
-      await FirebaseFirestore.instance.collection('products').doc(productId).delete();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Ürün silindi."), backgroundColor: Colors.red),
-        );
-      }
-    }
-  }
-
-  // --- LOGIC: İSTATİSTİKLERİ GÖSTER (SAĞ İKON FONKSİYONU) ---
-  Future<void> _showAnalytics() async {
-    User? user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-
-    // Yükleniyor göster
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => Center(child: CircularProgressIndicator(color: aestheticGreen)),
-    );
-
-    try {
-      // Verileri çek
-      QuerySnapshot snapshot = await FirebaseFirestore.instance
-          .collection('products')
-          .where('sellerId', isEqualTo: user.uid)
-          .get();
-
-      Navigator.pop(context); // Loading kapat
-
-      // Hesaplamalar
-      int totalProducts = snapshot.docs.length;
-      int totalStock = 0;
-      double potentialRevenue = 0.0;
-
-      for (var doc in snapshot.docs) {
-        var data = doc.data() as Map<String, dynamic>;
-        int stock = int.tryParse(data['stock'].toString()) ?? 0;
-        double price = double.tryParse(data['price'].toString()) ?? 0.0;
-
-        totalStock += stock;
-        potentialRevenue += (stock * price);
-      }
-
-      // Alt Pencereyi Aç
-      if (!mounted) return;
-      showModalBottomSheet(
-        context: context,
-        backgroundColor: const Color(0xFF1E1E1E),
-        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-        builder: (ctx) {
-          return Container(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text("Dükkan Özeti 📊", style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
-                    IconButton(onPressed: () => Navigator.pop(ctx), icon: const Icon(Icons.close, color: Colors.white54))
-                  ],
-                ),
-                const SizedBox(height: 24),
-
-                // İstatistik Kartları
-                _buildStatRow("Toplam Ürün Çeşidi", "$totalProducts Adet", Icons.inventory_2),
-                const Divider(color: Colors.white10, height: 30),
-                _buildStatRow("Toplam Stok", "$totalStock Adet", Icons.layers),
-                const Divider(color: Colors.white10, height: 30),
-                _buildStatRow("Tahmini Kazanç", "${potentialRevenue.toStringAsFixed(2)}₺", Icons.account_balance_wallet, isGreen: true),
-
-                const SizedBox(height: 20),
-              ],
-            ),
-          );
-        },
-      );
-
-    } catch (e) {
-      Navigator.pop(context); // Loading kapat
-      debugPrint("Hata: $e");
-    }
-  }
-
-  Widget _buildStatRow(String label, String value, IconData icon, {bool isGreen = false}) {
-    return Row(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: isGreen ? aestheticGreen.withOpacity(0.1) : Colors.white.withOpacity(0.05),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Icon(icon, color: isGreen ? aestheticGreen : Colors.white70, size: 24),
-        ),
-        const SizedBox(width: 16),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(label, style: const TextStyle(color: Colors.white54, fontSize: 14)),
-            const SizedBox(height: 4),
-            Text(value, style: TextStyle(color: isGreen ? aestheticGreen : Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
-          ],
-        )
-      ],
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
+    User? user = FirebaseAuth.instance.currentUser;
+
     return Scaffold(
       backgroundColor: darkBg,
       body: IndexedStack(
         index: _selectedIndex,
         children: _pages,
-      ),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          border: Border(top: BorderSide(color: Colors.white.withOpacity(0.05))),
-        ),
-        child: BottomNavigationBar(
-          backgroundColor: const Color(0xFF0C0C0C),
-          type: BottomNavigationBarType.fixed,
-          currentIndex: _selectedIndex,
-          selectedItemColor: aestheticGreen,
-          unselectedItemColor: Colors.grey.shade600,
-          showUnselectedLabels: true,
-          onTap: _onItemTapped,
-          items: const [
-            BottomNavigationBarItem(icon: Icon(Icons.inventory_2_outlined), activeIcon: Icon(Icons.inventory_2), label: 'Ürünlerim'),
-            BottomNavigationBarItem(icon: Icon(Icons.receipt_long_outlined), activeIcon: Icon(Icons.receipt_long), label: 'Siparişler'),
-            BottomNavigationBarItem(icon: Icon(Icons.notifications_outlined), activeIcon: Icon(Icons.notifications), label: 'Bildirimler'),
-            BottomNavigationBarItem(icon: Icon(Icons.storefront_outlined), activeIcon: Icon(Icons.storefront), label: 'Dükkan'),
-          ],
-        ),
       ),
       floatingActionButton: _selectedIndex == 0
           ? FloatingActionButton.extended(
@@ -207,49 +60,120 @@ class _BusinessHomeScreenState extends State<BusinessHomeScreen> {
         label: const Text("Ürün Ekle", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
       )
           : null,
+
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          border: Border(top: BorderSide(color: Colors.white.withOpacity(0.05))),
+        ),
+        child: StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('users')
+              .doc(user?.uid)
+              .collection('notifications')
+              .where('isRead', isEqualTo: false)
+              .snapshots(),
+          builder: (context, snapshot) {
+            int unreadCount = 0;
+            if (snapshot.hasData) {
+              unreadCount = snapshot.data!.docs.length;
+            }
+
+            return BottomNavigationBar(
+              backgroundColor: darkBg,
+              type: BottomNavigationBarType.fixed,
+              selectedItemColor: aestheticGreen,
+              unselectedItemColor: Colors.white54,
+              currentIndex: _selectedIndex,
+              onTap: _onItemTapped,
+              items: [
+                const BottomNavigationBarItem(icon: Icon(Icons.inventory_2_outlined), activeIcon: Icon(Icons.inventory_2), label: "Ürünlerim"),
+                const BottomNavigationBarItem(icon: Icon(Icons.receipt_long_outlined), activeIcon: Icon(Icons.receipt_long), label: "Siparişler"),
+                BottomNavigationBarItem(
+                  icon: unreadCount > 0
+                      ? Badge(
+                    label: Text(unreadCount > 9 ? '9+' : '$unreadCount', style: const TextStyle(color: Colors.white, fontSize: 10)),
+                    backgroundColor: Colors.redAccent,
+                    child: const Icon(Icons.notifications_outlined),
+                  )
+                      : const Icon(Icons.notifications_outlined),
+                  activeIcon: unreadCount > 0
+                      ? Badge(
+                    label: Text(unreadCount > 9 ? '9+' : '$unreadCount', style: const TextStyle(color: Colors.white, fontSize: 10)),
+                    backgroundColor: Colors.redAccent,
+                    child: const Icon(Icons.notifications),
+                  )
+                      : const Icon(Icons.notifications),
+                  label: "Bildirimler",
+                ),
+                const BottomNavigationBarItem(icon: Icon(Icons.store_outlined), activeIcon: Icon(Icons.store), label: "Dükkan"),
+              ],
+            );
+          },
+        ),
+      ),
     );
   }
 
-  // --- WIDGET: ÜRÜNLER SEKMESİ (Tab 0) ---
-  Widget _buildProductsTab() {
+  // 1. SEKME: ÜRÜNLERİM
+  Widget _buildHomeTab() {
     User? user = FirebaseAuth.instance.currentUser;
 
     return SafeArea(
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header
           Padding(
-            padding: const EdgeInsets.fromLTRB(24, 20, 24, 10),
+            padding: const EdgeInsets.all(24.0),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Column(
+                Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text("Ürünlerim 📦", style: TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold)),
-                    SizedBox(height: 4),
-                    Text("Satıştaki ürünlerini yönet", style: TextStyle(color: Colors.white54, fontSize: 14)),
+                    const Text("Ürünlerim", style: TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 4),
+                    // DÜKKAN PUANI GÖSTERİMİ
+                    StreamBuilder<DocumentSnapshot>(
+                      stream: FirebaseFirestore.instance.collection('users').doc(user?.uid).snapshots(),
+                      builder: (context, snapshot) {
+                        double rating = 0.0;
+                        if (snapshot.hasData && snapshot.data!.exists) {
+                          var data = snapshot.data!.data() as Map<String, dynamic>;
+                          double totalScore = double.tryParse(data['totalScore'].toString()) ?? 0.0;
+                          int count = int.tryParse(data['reviewCount'].toString()) ?? 0;
+                          if (count > 0) rating = totalScore / count;
+                        }
+                        return Row(
+                          children: [
+                            Text("Satıştaki ürünlerini yönet", style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 14)),
+                            if (rating > 0) ...[
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(color: Colors.orange.withOpacity(0.2), borderRadius: BorderRadius.circular(6)),
+                                child: Row(children: [const Icon(Icons.star, color: Colors.orange, size: 12), const SizedBox(width: 4), Text(rating.toStringAsFixed(1), style: const TextStyle(color: Colors.orange, fontSize: 12, fontWeight: FontWeight.bold))]),
+                              )
+                            ]
+                          ],
+                        );
+                      },
+                    ),
                   ],
                 ),
-                // --- ARTIK BU İKON İŞLEVSEL ---
                 GestureDetector(
-                  onTap: _showAnalytics, // Fonksiyonu buraya bağladık
+                  onTap: () => _showProductStatistics(user?.uid),
                   child: Container(
-                    padding: const EdgeInsets.all(12),
+                    padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.05),
                       shape: BoxShape.circle,
                     ),
-                    child: Icon(Icons.bar_chart, color: aestheticGreen, size: 24),
+                    child: Icon(Icons.bar_chart, color: aestheticGreen),
                   ),
-                ),
+                )
               ],
             ),
           ),
-
-          const SizedBox(height: 10),
-
-          // Liste
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
@@ -258,24 +182,28 @@ class _BusinessHomeScreenState extends State<BusinessHomeScreen> {
                   .orderBy('createdAt', descending: true)
                   .snapshots(),
               builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  return Center(child: Padding(padding: const EdgeInsets.all(20.0), child: Text("Index Hatası! Terminaldeki linke tıkla.\n${snapshot.error}", style: const TextStyle(color: Colors.red), textAlign: TextAlign.center)));
-                }
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return Center(child: CircularProgressIndicator(color: aestheticGreen));
                 }
                 if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                  return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.inventory_2_outlined, size: 80, color: Colors.white.withOpacity(0.1)), const SizedBox(height: 16), const Text("Henüz hiç ürün eklemedin.", style: TextStyle(color: Colors.white54, fontSize: 16))]));
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.inventory_2_outlined, size: 60, color: Colors.white.withOpacity(0.1)),
+                        const SizedBox(height: 16),
+                        const Text("Henüz ürün eklemediniz.", style: TextStyle(color: Colors.white54)),
+                      ],
+                    ),
+                  );
                 }
-
                 return ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 80),
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
                   itemCount: snapshot.data!.docs.length,
                   itemBuilder: (context, index) {
                     var doc = snapshot.data!.docs[index];
                     var data = doc.data() as Map<String, dynamic>;
-                    String productId = doc.id;
-                    return _buildProductCard(data, productId);
+                    return _buildProductCard(doc.id, data);
                   },
                 );
               },
@@ -286,58 +214,251 @@ class _BusinessHomeScreenState extends State<BusinessHomeScreen> {
     );
   }
 
-  // --- WIDGET: ÜRÜN KARTI ---
-  Widget _buildProductCard(Map<String, dynamic> data, String productId) {
-    String name = data['name'] ?? 'Ürün Adı';
+  Widget _buildProductCard(String docId, Map<String, dynamic> data) {
+    String name = data['name'] ?? 'İsimsiz Ürün';
     double price = double.tryParse(data['price'].toString()) ?? 0.0;
-    double originalPrice = 0.0;
-    if (data['originalPrice'] != null) {
-      originalPrice = double.tryParse(data['originalPrice'].toString()) ?? 0.0;
-    }
+    double originalPrice = double.tryParse(data['originalPrice'].toString()) ?? 0.0;
     int stock = int.tryParse(data['stock'].toString()) ?? 0;
-    String imageUrl = data['imageUrl'] ?? 'https://cdn-icons-png.flaticon.com/512/2921/2921822.png';
-    bool hasDiscount = originalPrice > price;
-    int discountPercent = hasDiscount ? (((originalPrice - price) / originalPrice) * 100).round() : 0;
+    String imageUrl = data['imageUrl'] ?? 'https://cdn-icons-png.flaticon.com/512/1160/1160358.png';
+
+    int discountRate = 0;
+    if (originalPrice > price && price > 0) {
+      discountRate = (((originalPrice - price) / originalPrice) * 100).round();
+    }
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: Colors.white.withOpacity(0.05), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white.withOpacity(0.08))),
-      child: Row(
-        children: [
-          Container(
-            width: 70, height: 70,
-            decoration: BoxDecoration(borderRadius: BorderRadius.circular(16), image: DecorationImage(image: NetworkImage(imageUrl), fit: BoxFit.cover)),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+      decoration: BoxDecoration(
+        color: const Color(0xFF161616),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withOpacity(0.05)),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(20),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          splashColor: aestheticGreen.withOpacity(0.1),
+          highlightColor: Colors.transparent,
+          onTap: () {
+            Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => EditProductScreen(productId: docId, productData: data))
+            );
+          },
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
               children: [
-                Text(name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16), maxLines: 1, overflow: TextOverflow.ellipsis),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), decoration: BoxDecoration(color: aestheticGreen.withOpacity(0.1), borderRadius: BorderRadius.circular(6), border: Border.all(color: aestheticGreen.withOpacity(0.2))), child: Text("Stok: $stock", style: TextStyle(color: aestheticGreen, fontSize: 10, fontWeight: FontWeight.bold))),
-                    const SizedBox(width: 8),
-                    if (hasDiscount) Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), decoration: BoxDecoration(color: Colors.red.withOpacity(0.15), borderRadius: BorderRadius.circular(6), border: Border.all(color: Colors.red.withOpacity(0.3))), child: Text("%$discountPercent", style: const TextStyle(color: Colors.redAccent, fontSize: 10, fontWeight: FontWeight.bold))),
-                  ],
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.network(
+                    imageUrl,
+                    width: 80, height: 80, fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) => Container(width: 80, height: 80, color: Colors.grey[800], child: const Icon(Icons.broken_image, color: Colors.white54)),
+                  ),
                 ),
-                const SizedBox(height: 6),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text("${price.toStringAsFixed(2)}₺", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-                    const SizedBox(width: 8),
-                    if (hasDiscount) Padding(padding: const EdgeInsets.only(bottom: 2), child: Text("${originalPrice.toStringAsFixed(2)}₺", style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 13, decoration: TextDecoration.lineThrough, decorationColor: Colors.white.withOpacity(0.4), fontWeight: FontWeight.w500))),
-                  ],
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(name, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          _buildTag("Stok: $stock", stock > 0 ? aestheticGreen : Colors.red),
+                          const SizedBox(width: 8),
+                          if (discountRate > 0) _buildTag("%$discountRate", Colors.redAccent),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Text("${price.toStringAsFixed(2)}₺", style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                          if (discountRate > 0) ...[
+                            const SizedBox(width: 8),
+                            Text("${originalPrice.toStringAsFixed(2)}₺", style: const TextStyle(color: Colors.grey, fontSize: 12, decoration: TextDecoration.lineThrough)),
+                          ]
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                // SİLME BUTONU
+                IconButton(
+                  icon: Icon(Icons.delete_outline, color: Colors.red.withOpacity(0.7)),
+                  onPressed: () => _confirmDelete(docId), // Yeni fonksiyonu çağırır
                 ),
               ],
             ),
           ),
-          IconButton(onPressed: () => _deleteProduct(productId), icon: Icon(Icons.delete_outline, color: Colors.red.withOpacity(0.7))),
-        ],
+        ),
       ),
+    );
+  }
+
+  Widget _buildTag(String text, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(color: color.withOpacity(0.2), borderRadius: BorderRadius.circular(8), border: Border.all(color: color.withOpacity(0.5), width: 0.5)),
+      child: Text(text, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold)),
+    );
+  }
+
+  // --- İSTATİSTİKLER ---
+  void _showProductStatistics(String? uid) {
+    if (uid == null) return;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1E1E1E),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) {
+        return Container(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text("Envanter Özeti 📊", style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
+                  IconButton(onPressed: () => Navigator.pop(ctx), icon: const Icon(Icons.close, color: Colors.white54))
+                ],
+              ),
+              const SizedBox(height: 20),
+              FutureBuilder<QuerySnapshot>(
+                future: FirebaseFirestore.instance.collection('products').where('sellerId', isEqualTo: uid).get(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) return Center(child: CircularProgressIndicator(color: aestheticGreen));
+                  int totalProducts = 0; int totalStock = 0; double totalValue = 0.0; int lowStockCount = 0;
+                  if (snapshot.hasData) {
+                    totalProducts = snapshot.data!.docs.length;
+                    for (var doc in snapshot.data!.docs) {
+                      var data = doc.data() as Map<String, dynamic>;
+                      int stock = int.tryParse(data['stock'].toString()) ?? 0;
+                      double price = double.tryParse(data['price'].toString()) ?? 0.0;
+                      totalStock += stock;
+                      totalValue += (stock * price);
+                      if (stock < 5) lowStockCount++;
+                    }
+                  }
+                  return Column(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(color: aestheticGreen.withOpacity(0.1), borderRadius: BorderRadius.circular(16), border: Border.all(color: aestheticGreen.withOpacity(0.3))),
+                        child: Row(children: [
+                          Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: aestheticGreen.withOpacity(0.2), shape: BoxShape.circle), child: Icon(Icons.monetization_on, color: aestheticGreen, size: 24)),
+                          const SizedBox(width: 16),
+                          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text("Toplam Envanter Değeri", style: TextStyle(color: Colors.white70, fontSize: 14)), Text("${totalValue.toStringAsFixed(2)}₺", style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold))])
+                        ]),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(children: [
+                        Expanded(child: _buildStatCard("Çeşit", "$totalProducts Adet")),
+                        const SizedBox(width: 12),
+                        Expanded(child: _buildStatCard("Toplam Stok", "$totalStock Adet")),
+                      ]),
+                      if (lowStockCount > 0) ...[
+                        const SizedBox(height: 12),
+                        Container(
+                          width: double.infinity, padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(color: Colors.red.withOpacity(0.1), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.red.withOpacity(0.3))),
+                          child: Row(children: [const Icon(Icons.warning_amber_rounded, color: Colors.redAccent, size: 20), const SizedBox(width: 10), Text("$lowStockCount ürünün stoğu kritik seviyede!", style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold))]),
+                        ),
+                      ]
+                    ],
+                  );
+                },
+              ),
+              const SizedBox(height: 30),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildStatCard(String title, String value) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: Colors.white.withOpacity(0.05), borderRadius: BorderRadius.circular(16)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(color: Colors.white54, fontSize: 12)), const SizedBox(height: 4), Text(value, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold))]),
+    );
+  }
+
+  // --- YENİ: ŞIK SİLME EKRANI ---
+  void _confirmDelete(String docId) {
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: '',
+      barrierColor: Colors.black.withOpacity(0.8),
+      transitionDuration: const Duration(milliseconds: 200),
+      pageBuilder: (ctx, anim1, anim2) => Container(),
+      transitionBuilder: (ctx, anim1, anim2, child) {
+        return ScaleTransition(
+          scale: CurvedAnimation(parent: anim1, curve: Curves.easeOutBack),
+          child: FadeTransition(
+            opacity: anim1,
+            child: AlertDialog(
+              backgroundColor: const Color(0xFF1E1E1E),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              contentPadding: const EdgeInsets.all(24),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 80, height: 80,
+                    decoration: BoxDecoration(
+                      color: Colors.redAccent.withOpacity(0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.delete_forever_rounded, color: Colors.redAccent, size: 40),
+                  ),
+                  const SizedBox(height: 24),
+                  const Text("Ürünü Sil", textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 12),
+                  Text("Bu ürünü silmek istediğinize emin misiniz? Bu işlem geri alınamaz.", textAlign: TextAlign.center, style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 14, height: 1.5)),
+                  const SizedBox(height: 32),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          ),
+                          child: const Text("Vazgeç", style: TextStyle(color: Colors.white70, fontSize: 16, fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () async {
+                            await FirebaseFirestore.instance.collection('products').doc(docId).delete();
+                            if (mounted) Navigator.pop(ctx);
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.redAccent,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            elevation: 0,
+                          ),
+                          child: const Text("Evet, Sil", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

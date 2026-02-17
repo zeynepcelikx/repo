@@ -54,7 +54,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
               child: Column(
                 children: [
                   const Text(
-                    "Lezzetleri Keşfet 🍔",
+                    "Lezzetleri Keşfet ",
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 24,

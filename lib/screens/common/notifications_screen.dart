@@ -98,7 +98,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     children: [
                       Text("Bildirimler", style: TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
                       SizedBox(width: 8),
-                      Text("🔔", style: TextStyle(fontSize: 24)),
                     ],
                   ),
                   GestureDetector(
