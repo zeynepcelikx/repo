@@ -42,14 +42,27 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
 
   // --- LOGIC KISMI ---
   void _checkUserAndNavigate() async {
-    await Future.delayed(const Duration(seconds: 3));
+    // Animasyon için minimum bekleme
+    await Future.delayed(const Duration(seconds: 2));
 
     if (!mounted) return;
 
-    User? user = FirebaseAuth.instance.currentUser;
+    // Firebase Auth'un tam olarak hazır olmasını bekle
+    // authStateChanges() stream'i Firebase hazır olunca doğru kullanıcıyı döndürür
+    final user = await FirebaseAuth.instance.authStateChanges().first;
+
+    if (!mounted) return;
 
     if (user != null) {
-      _navigateBasedOnRole(user.uid);
+      // Kullanıcı zaten giriş yapmış, reload ile token'ı tazele
+      try {
+        await user.reload();
+        _navigateBasedOnRole(user.uid);
+      } catch (e) {
+        // Token geçersiz veya kullanıcı silinmişse
+        await FirebaseAuth.instance.signOut();
+        _goToOnboarding();
+      }
     } else {
       Navigator.pushReplacement(
         context,

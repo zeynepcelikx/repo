@@ -253,7 +253,7 @@ class _BusinessSettingsScreenState extends State<BusinessSettingsScreen> {
                 const SizedBox(height: 12),
                 _buildGlassTextField(_phoneController, "Telefon", Icons.phone, isNumber: true),
                 const SizedBox(height: 12),
-                _buildGlassTextField(_closingTimeController, "Kapanış Saati (Örn: 22:00)", Icons.access_time),
+                _buildTimePickerField(),
 
                 const SizedBox(height: 30),
 
@@ -369,6 +369,119 @@ class _BusinessSettingsScreenState extends State<BusinessSettingsScreen> {
   }
 
   // --- HELPERS ---
+
+  // Saat Seçici Widget
+  Widget _buildTimePickerField() {
+    return GestureDetector(
+      onTap: () => _selectTime(),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: cardBg,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white.withOpacity(0.05)),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.access_time, color: Colors.white54, size: 20),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                _closingTimeController.text.isEmpty
+                    ? "Kapanış Saati Seçin"
+                    : _closingTimeController.text,
+                style: TextStyle(
+                  color: _closingTimeController.text.isEmpty
+                      ? Colors.white.withOpacity(0.3)
+                      : Colors.white,
+                  fontSize: 16,
+                ),
+              ),
+            ),
+            Icon(Icons.keyboard_arrow_down, color: aestheticGreen, size: 24),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Saat Seçici Dialog
+  Future<void> _selectTime() async {
+    // Mevcut saati parse et veya varsayılan 22:00 kullan
+    TimeOfDay initialTime = const TimeOfDay(hour: 22, minute: 0);
+
+    if (_closingTimeController.text.isNotEmpty) {
+      try {
+        final parts = _closingTimeController.text.split(':');
+        if (parts.length == 2) {
+          initialTime = TimeOfDay(
+            hour: int.parse(parts[0]),
+            minute: int.parse(parts[1]),
+          );
+        }
+      } catch (_) {}
+    }
+
+    final TimeOfDay? picked = await showTimePicker(
+      context: context,
+      initialTime: initialTime,
+      builder: (context, child) {
+        return Theme(
+          data: ThemeData.dark().copyWith(
+            colorScheme: ColorScheme.dark(
+              primary: aestheticGreen,
+              onPrimary: Colors.black,
+              surface: cardBg,
+              onSurface: Colors.white,
+            ),
+            dialogBackgroundColor: const Color(0xFF1E1E1E),
+            timePickerTheme: TimePickerThemeData(
+              backgroundColor: const Color(0xFF1E1E1E),
+              hourMinuteShape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              dayPeriodShape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              dayPeriodColor: WidgetStateColor.resolveWith((states) =>
+                  states.contains(WidgetState.selected)
+                      ? aestheticGreen
+                      : cardBg),
+              dayPeriodTextColor: WidgetStateColor.resolveWith((states) =>
+                  states.contains(WidgetState.selected)
+                      ? Colors.black
+                      : Colors.white),
+              hourMinuteColor: WidgetStateColor.resolveWith((states) =>
+                  states.contains(WidgetState.selected)
+                      ? aestheticGreen
+                      : cardBg),
+              hourMinuteTextColor: WidgetStateColor.resolveWith((states) =>
+                  states.contains(WidgetState.selected)
+                      ? Colors.black
+                      : Colors.white),
+              dialHandColor: aestheticGreen,
+              dialBackgroundColor: cardBg,
+              dialTextColor: WidgetStateColor.resolveWith((states) =>
+                  states.contains(WidgetState.selected)
+                      ? Colors.black
+                      : Colors.white),
+              entryModeIconColor: aestheticGreen,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null) {
+      setState(() {
+        // Saat formatını HH:mm olarak kaydet
+        final hour = picked.hour.toString().padLeft(2, '0');
+        final minute = picked.minute.toString().padLeft(2, '0');
+        _closingTimeController.text = '$hour:$minute';
+      });
+    }
+  }
 
   Widget _buildSectionTitle(String title) {
     return Padding(

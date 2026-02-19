@@ -14,6 +14,7 @@ void main() async {
         appId: "1:883878657226:ios:e14aefe7d99ef60484c833",
         messagingSenderId: "883878657226",
         projectId: "indirkazan-d1c8c",
+        storageBucket: "indirkazan-d1c8c.firebasestorage.app",
       ),
     );
     print("Firebase Başarıyla Bağlandı! 🚀");

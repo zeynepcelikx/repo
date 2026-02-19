@@ -112,19 +112,20 @@ class _CustomerMainLayoutState extends State<CustomerMainLayout> {
                     }
 
                     return Stack(
+                      clipBehavior: Clip.none,
                       children: [
                         const Icon(Icons.notifications_outlined), // Ana Zil İkonu
 
                         if (unreadCount > 0)
                           Positioned(
-                            right: 0,
-                            top: 0,
+                            right: -6,
+                            top: -4,
                             child: Container(
                               padding: const EdgeInsets.all(2),
                               decoration: BoxDecoration(
                                 color: Colors.red,
                                 shape: BoxShape.circle,
-                                border: Border.all(color: darkBg, width: 1.5), // Siyah çerçeve (ikonun üstünde belli olsun diye)
+                                border: Border.all(color: darkBg, width: 1.5),
                               ),
                               constraints: const BoxConstraints(
                                 minWidth: 16,
